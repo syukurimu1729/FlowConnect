@@ -1,41 +1,32 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <title>Hidden Mode - Sequential One-Line</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>SEQUENTIAL LOCK - Responsive</title>
     <style>
-        body { font-family: 'Courier New', Courier, monospace; display: flex; flex-direction: column; align-items: center; background: #000; color: #fff; }
-        #game-container { position: relative; margin-top: 20px; user-select: none; }
-        canvas { border: 2px solid #333; border-radius: 4px; cursor: crosshair; background: #050505; }
-        .controls { margin-top: 20px; text-align: center; }
-        button { padding: 10px 20px; font-size: 14px; cursor: pointer; background: #111; border: 1px solid #444; color: #888; border-radius: 2px; }
-        button:hover { background: #222; color: #fff; }
-        .status { margin-top: 15px; font-weight: bold; min-height: 1.5em; color: #00ff00; text-shadow: 0 0 5px #00ff00; }
-        .hint { color: #444; font-size: 12px; margin-top: 5px; }
+        body{font-family: "Courier New", monospace; margin:0; padding:16px; background:#000; color:#fff; display:flex; flex-direction:column; align-items:center;}
+        h1{margin:6px 0;font-size:clamp(18px,4vw,26px);}
+        #game-container{width:100%; max-width:720px; margin-top:12px;}
+        canvas{width:100%; height:auto; display:block; border-radius:4px; border:2px solid #333; background:#050505; touch-action:none;}
+        .controls{width:100%; max-width:720px; margin-top:12px; text-align:center;}
+        button{padding:10px 18px; font-size:15px; border-radius:6px; background:#111; color:#bbb; border:1px solid #444;}
+        .status{margin-top:10px; color:#00ff00; text-shadow:0 0 5px #00ff00; min-height:1.2em;}
+        .hint{color:#444; font-size:12px; margin-top:6px;}
     </style>
 </head>
 <body>
-
     <h1>SEQUENTIAL LOCK</h1>
-    <div id="game-container">
-        <canvas id="gameCanvas"></canvas>
-    </div>
+    <div id="game-container"><canvas id="gameCanvas"></canvas></div>
     <div class="controls">
-        <button onclick="resetGame()">RESET SYSTEM</button>
+        <button id="resetBtn">RESET SYSTEM</button>
         <div id="status" class="status"></div>
-        <div class="hint">1 -> 2 -> 3 ... 10</div>
+        <div class="hint">1 → 2 → 3 ... 10 の順に通って全マスを埋めてください</div>
     </div>
 
 <script>
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const statusDiv = document.getElementById('status');
-
 const GRID_SIZE = 6;
-const CELL_SIZE = 60;
-canvas.width = GRID_SIZE * CELL_SIZE;
-canvas.height = GRID_SIZE * CELL_SIZE;
-
+let CELL_SIZE = 60;
 const level = [
     ['10', 0, '9','8','6', 0],
     ['5', 0,  0,  0, '7', 0],
@@ -45,169 +36,173 @@ const level = [
     ['1', 0,  0,  0,  0,'2']
 ];
 
-let path = []; // 一筆書きの単一経路
-let isDrawing = false;
-let nextNumberRequired = 1; // 次に通過すべき数字
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const statusDiv = document.getElementById('status');
+const resetBtn = document.getElementById('resetBtn');
 
-function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // グリッド線
+let path = [];
+let isDrawing = false;
+let nextNumberRequired = 1;
+
+function resizeCanvas(){
+    const dpr = window.devicePixelRatio || 1;
+    const containerWidth = Math.min(window.innerWidth*0.95, 720);
+    const maxByHeight = window.innerHeight * 0.7;
+    const target = Math.min(containerWidth, maxByHeight);
+    CELL_SIZE = Math.max(28, Math.floor(target / GRID_SIZE));
+    const logicalW = CELL_SIZE * GRID_SIZE;
+    canvas.style.width = logicalW + 'px';
+    canvas.style.height = logicalW + 'px';
+    canvas.width = logicalW * dpr;
+    canvas.height = logicalW * dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw();
+}
+
+function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    // grid
     ctx.strokeStyle = "#111";
     ctx.lineWidth = 1;
-    for(let i=0; i<=GRID_SIZE; i++) {
-        ctx.beginPath(); ctx.moveTo(i*CELL_SIZE, 0); ctx.lineTo(i*CELL_SIZE, canvas.height); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(0, i*CELL_SIZE); ctx.lineTo(canvas.width, i*CELL_SIZE); ctx.stroke();
+    for(let i=0;i<=GRID_SIZE;i++){
+        ctx.beginPath(); ctx.moveTo(i*CELL_SIZE,0); ctx.lineTo(i*CELL_SIZE, CELL_SIZE*GRID_SIZE); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,i*CELL_SIZE); ctx.lineTo(CELL_SIZE*GRID_SIZE, i*CELL_SIZE); ctx.stroke();
     }
-
-    // 経路の描画
-    if (path.length > 0) {
+    // path
+    if(path.length>0){
         ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 12;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
+        ctx.lineWidth = Math.max(10, CELL_SIZE*0.22);
+        ctx.lineCap = "round"; ctx.lineJoin = "round";
         ctx.beginPath();
-        ctx.moveTo(path[0].x * CELL_SIZE + CELL_SIZE/2, path[0].y * CELL_SIZE + CELL_SIZE/2);
-        for(let i=1; i<path.length; i++) {
-            ctx.lineTo(path[i].x * CELL_SIZE + CELL_SIZE/2, path[i].y * CELL_SIZE + CELL_SIZE/2);
-        }
+        ctx.moveTo(path[0].x*CELL_SIZE + CELL_SIZE/2, path[0].y*CELL_SIZE + CELL_SIZE/2);
+        for(let i=1;i<path.length;i++) ctx.lineTo(path[i].x*CELL_SIZE + CELL_SIZE/2, path[i].y*CELL_SIZE + CELL_SIZE/2);
         ctx.stroke();
     }
-
-    // 数字ドットの描画
-    for(let y=0; y<GRID_SIZE; y++) {
-        for(let x=0; x<GRID_SIZE; x++) {
+    // nodes
+    for(let y=0;y<GRID_SIZE;y++){
+        for(let x=0;x<GRID_SIZE;x++){
             const val = level[y][x];
-            if(val !== 0) {
+            if(val !== 0){
                 const num = parseInt(val);
-                // すでに通過した数字は少し暗くする
                 ctx.fillStyle = num < nextNumberRequired ? "#444" : "#fff";
                 ctx.beginPath();
                 ctx.arc(x*CELL_SIZE + CELL_SIZE/2, y*CELL_SIZE + CELL_SIZE/2, CELL_SIZE/3, 0, Math.PI*2);
                 ctx.fill();
-                
-                // 数字の表示
-                ctx.fillStyle = num < nextNumberRequired ? "#000" : "#000";
-                ctx.font = "bold 20px Arial";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
+                ctx.fillStyle = "#000";
+                ctx.font = `bold ${Math.max(12, Math.floor(CELL_SIZE*0.35))}px Arial`;
+                ctx.textAlign = "center"; ctx.textBaseline = "middle";
                 ctx.fillText(val, x*CELL_SIZE + CELL_SIZE/2, y*CELL_SIZE + CELL_SIZE/2);
             }
         }
     }
 }
 
-function getMousePos(e) {
+function getPosFromEvent(e){
+    let cx, cy;
+    if(e.touches && e.touches.length){ cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+    else if(e.changedTouches && e.changedTouches.length){ cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
+    else { cx = e.clientX; cy = e.clientY; }
     const rect = canvas.getBoundingClientRect();
-    return {
-        x: Math.floor((e.clientX - rect.left) / CELL_SIZE),
-        y: Math.floor((e.clientY - rect.top) / CELL_SIZE)
-    };
+    const x = Math.floor((cx - rect.left) / CELL_SIZE);
+    const y = Math.floor((cy - rect.top) / CELL_SIZE);
+    return {x,y};
 }
+canvas.style.touchAction = 'none';
 
-canvas.addEventListener('mousedown', e => {
-    const pos = getMousePos(e);
+function onPointerDown(e){
+    e.preventDefault();
+    const pos = getPosFromEvent(e);
+    if(pos.x<0||pos.x>=GRID_SIZE||pos.y<0||pos.y>=GRID_SIZE) return;
     const cellValue = level[pos.y][pos.x];
-
-    // 描き始め：まだ何も描いていない時は「1」からのみ開始可能
-    if (path.length === 0) {
-        if (cellValue === "1") {
+    if(path.length === 0){
+        if(cellValue === "1"){
             path = [pos];
             nextNumberRequired = 2;
             isDrawing = true;
         }
     } else {
-        // 続きから描く：現在のパスの末尾をクリックした場合のみ再開
-        const last = path[path.length - 1];
-        if (pos.x === last.x && pos.y === last.y) {
+        const last = path[path.length-1];
+        if(pos.x === last.x && pos.y === last.y) {
             isDrawing = true;
         }
     }
     statusDiv.innerText = "";
     draw();
-});
-
-window.addEventListener('mousemove', e => {
+}
+function onPointerMove(e){
     if(!isDrawing) return;
-    const pos = getMousePos(e);
-    if(pos.x < 0 || pos.x >= GRID_SIZE || pos.y < 0 || pos.y >= GRID_SIZE) return;
-
+    e.preventDefault();
+    const pos = getPosFromEvent(e);
+    if(pos.x<0||pos.x>=GRID_SIZE||pos.y<0||pos.y>=GRID_SIZE) return;
     const lastPos = path[path.length - 1];
-    if (pos.x === lastPos.x && pos.y === lastPos.y) return;
-
-    const dx = Math.abs(pos.x - lastPos.x);
-    const dy = Math.abs(pos.y - lastPos.y);
-
-    if((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
-        // 既存の経路との重複チェック（戻る動作は許可）
-        const existingIndex = path.findIndex(p => p.x === pos.x && p.y === pos.y);
-        
-        if (existingIndex !== -1) {
-            // 戻る場合、その地点までのパスを切り詰める
-            // ただし、数字ドットを跨いで戻る場合は、nextNumberを再計算
-            const removedPart = path.slice(existingIndex + 1);
-            removedPart.forEach(p => {
-                const val = level[p.y][p.x];
-                if (val !== 0) {
-                    const n = parseInt(val);
-                    if (n < nextNumberRequired) nextNumberRequired = n;
+    if(!lastPos) return;
+    if(pos.x === lastPos.x && pos.y === lastPos.y) return;
+    const dx = Math.abs(pos.x - lastPos.x), dy = Math.abs(pos.y - lastPos.y);
+    if((dx===1 && dy===0) || (dx===0 && dy===1)){
+        const existingIndex = path.findIndex(p=>p.x===pos.x && p.y===pos.y);
+        if(existingIndex !== -1){
+            // 戻る: nextNumberRequired を再計算（簡易）
+            const removed = path.slice(existingIndex+1);
+            removed.forEach(p=>{
+                const v = level[p.y][p.x];
+                if(v !== 0){
+                    const n = parseInt(v);
+                    if(n < nextNumberRequired) nextNumberRequired = n;
                 }
             });
-            path = path.slice(0, existingIndex + 1);
+            path = path.slice(0, existingIndex+1);
         } else {
-            // 新規マスに進む場合
             const targetValue = level[pos.y][pos.x];
-            
-            if (targetValue === 0) {
+            if(targetValue === 0) {
                 path.push(pos);
             } else {
                 const targetNum = parseInt(targetValue);
-                // 正しい順番の数字なら通過可能
-                if (targetNum === nextNumberRequired) {
+                if(targetNum === nextNumberRequired){
                     path.push(pos);
                     nextNumberRequired++;
-                    // 最後の数字（10）に到達したら判定
-                    if (targetNum === 10) {
+                    if(targetNum === 10){
                         isDrawing = false;
                         checkWin();
                     }
-                } else if (targetNum < nextNumberRequired) {
-                    // すでに通過済みの数字マスは普通の道として通れる
+                } else if(targetNum < nextNumberRequired){
                     path.push(pos);
                 }
-                // 間違った順番（例：2の次に4）は通過不可
             }
         }
     }
     draw();
-});
-
-window.addEventListener('mouseup', () => {
+}
+function onPointerUp(e){
     isDrawing = false;
     draw();
-});
-
-function checkWin() {
+}
+function checkWin(){
     const filledCount = path.length;
     const totalCells = GRID_SIZE * GRID_SIZE;
-
-    if (nextNumberRequired > 10 && filledCount === totalCells) {
+    if(nextNumberRequired > 10 && filledCount === totalCells){
         statusDiv.innerText = "SYSTEM UNLOCKED: [Keyword: VOID]";
-    } else if (nextNumberRequired > 10) {
+    } else if(nextNumberRequired > 10){
         statusDiv.innerText = "ERROR: NOT ALL NODES FILLED";
-        // 10に到達したが全部埋まっていない場合、10のマスから再開できるようisDrawingはfalse
     }
 }
-
-function resetGame() {
+function resetGame(){
     path = [];
     nextNumberRequired = 1;
     isDrawing = false;
     statusDiv.innerText = "";
     draw();
 }
-
-draw();
+function setup(){
+    window.addEventListener('resize', resizeCanvas);
+    canvas.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove, {passive:false});
+    window.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('touchmove', e=>e.preventDefault(), {passive:false});
+    resetBtn.addEventListener('click', resetGame);
+    resizeCanvas();
+}
+setup();
 </script>
 </body>
 </html>
