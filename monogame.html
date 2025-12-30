@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Hidden Mode - Mono</title>
+    <style>
+        /* 脱出ゲームらしく、より暗く不気味な雰囲気に調整 */
+        body { font-family: 'Courier New', Courier, monospace; display: flex; flex-direction: column; align-items: center; background: #000; color: #fff; }
+        #game-container { position: relative; margin-top: 20px; user-select: none; }
+        canvas { border: 2px solid #555; border-radius: 4px; cursor: crosshair; background: #050505; }
+        .controls { margin-top: 20px; text-align: center; }
+        button { padding: 10px 20px; font-size: 14px; cursor: pointer; background: #222; border: 1px solid #555; color: #ccc; border-radius: 2px; }
+        button:hover { background: #333; }
+        .status { margin-top: 10px; font-weight: bold; color: #fff; text-shadow: 0 0 5px #fff; }
+    </style>
+</head>
+<body>
+
+    <h1>UNKNOWN SIGNAL</h1>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+    <div class="controls">
+        <button onclick="resetGame()">RESET SYSTEM</button>
+        <div id="status" class="status"></div>
+    </div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const statusDiv = document.getElementById('status');
+
+const GRID_SIZE = 6;
+const CELL_SIZE = 60;
+canvas.width = GRID_SIZE * CELL_SIZE;
+canvas.height = GRID_SIZE * CELL_SIZE;
+
+// すべての色を「白」に統一
+const MONO_COLOR = '#FFFFFF';
+
+const level = [
+    ['A', 0, 'C','D','E', 0],
+    ['B', 0,  0,  0, 'D', 0],
+    [ 0,  0,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  0,  0],
+    [ 0,  0, 'B', 0,  0,'E'],
+    ['A', 0,  0,  0,  0,'C']
+];
+
+let paths = []; // 自由につなぐため、配列で1つの大きな経路として扱う
+let completedPaths = []; // 描き終わった経路のリスト
+let isDrawing = false;
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // グリッド線
+    ctx.strokeStyle = "#111";
+    ctx.lineWidth = 1;
+    for(let i=0; i<=GRID_SIZE; i++) {
+        ctx.beginPath(); ctx.moveTo(i*CELL_SIZE, 0); ctx.lineTo(i*CELL_SIZE, canvas.height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i*CELL_SIZE); ctx.lineTo(canvas.width, i*CELL_SIZE); ctx.stroke();
+    }
+
+    // 確定した経路の描画
+    ctx.strokeStyle = MONO_COLOR;
+    ctx.lineWidth = 10;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    completedPaths.concat(isDrawing ? [paths] : []).forEach(path => {
+        if (path.length > 0) {
+            ctx.beginPath();
+            ctx.moveTo(path[0].x * CELL_SIZE + CELL_SIZE/2, path[0].y * CELL_SIZE + CELL_SIZE/2);
+            for(let i=1; i<path.length; i++) {
+                ctx.lineTo(path[i].x * CELL_SIZE + CELL_SIZE/2, path[i].y * CELL_SIZE + CELL_SIZE/2);
+            }
+            ctx.stroke();
+        }
+    });
+
+    // ドットの描画（すべて同じ白）
+    for(let y=0; y<GRID_SIZE; y++) {
+        for(let x=0; x<GRID_SIZE; x++) {
+            if(level[y][x] !== 0) {
+                ctx.fillStyle = MONO_COLOR;
+                ctx.beginPath();
+                ctx.arc(x*CELL_SIZE + CELL_SIZE/2, y*CELL_SIZE + CELL_SIZE/2, CELL_SIZE/4, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+    }
+}
+
+function getMousePos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: Math.floor((e.clientX - rect.left) / CELL_SIZE),
+        y: Math.floor((e.clientY - rect.top) / CELL_SIZE)
+    };
+}
+
+canvas.addEventListener('mousedown', e => {
+    const pos = getMousePos(e);
+    // 何らかの文字がある場所（ドット）から開始
+    if(level[pos.y][pos.x] !== 0) {
+        // すでにそこから経路が始まっていないかチェック（簡易版）
+        paths = [pos];
+        isDrawing = true;
+        statusDiv.innerText = "";
+    }
+    draw();
+});
+
+window.addEventListener('mousemove', e => {
+    if(!isDrawing) return;
+    const pos = getMousePos(e);
+    if(pos.x < 0 || pos.x >= GRID_SIZE || pos.y < 0 || pos.y >= GRID_SIZE) return;
+
+    const lastPos = paths[paths.length - 1];
+    const dx = Math.abs(pos.x - lastPos.x);
+    const dy = Math.abs(pos.y - lastPos.y);
+
+    if((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
+        // 自分の今の線の中での重複チェック
+        const existingIndex = paths.findIndex(p => p.x === pos.x && p.y === pos.y);
+        if (existingIndex !== -1) {
+            paths = paths.slice(0, existingIndex + 1);
+        } else {
+            paths.push(pos);
+        }
+
+        // 別のドットに到達したらその線を確定
+        if(level[pos.y][pos.x] !== 0 && paths.length > 1) {
+            completedPaths.push([...paths]);
+            isDrawing = false;
+            checkWin();
+        }
+    }
+    draw();
+});
+
+window.addEventListener('mouseup', () => {
+    isDrawing = false;
+    draw();
+});
+
+function checkWin() {
+    // 全マス埋まっているか確認
+    let filledCells = new Set();
+    completedPaths.forEach(path => {
+        path.forEach(p => filledCells.add(`${p.x},${p.y}`));
+    });
+
+    if(filledCells.size === GRID_SIZE * GRID_SIZE) {
+        statusDiv.innerText = "ACCESS GRANTED: [キーワード: GHOST]";
+    }
+}
+
+function resetGame() {
+    paths = [];
+    completedPaths = [];
+    isDrawing = false;
+    statusDiv.innerText = "";
+    draw();
+}
+
+draw();
+</script>
+</body>
+</html>
