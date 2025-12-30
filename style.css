@@ -1,0 +1,44 @@
+:root{
+  --bg:#0f2133;
+  --panel:#0b1622;
+  --cell:#0e2740;
+  --grid-gap:6px;
+  --cols:7;
+  --rows:11;
+  --cell-size:48px;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;background:linear-gradient(180deg,#05101a 0%,#0a2030 100%);color:#e6f0ff}
+.app{max-width:420px;margin:18px auto;padding:16px;background:rgba(255,255,255,0.02);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.6)}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+header h1{font-size:18px;margin:0}
+.controls{display:flex;gap:8px;align-items:center}
+button{background:#123; color:#dff; border:1px solid rgba(255,255,255,0.04);padding:6px 10px;border-radius:8px;cursor:pointer}
+button:hover{opacity:0.9}
+.board{background:var(--panel);padding:12px;border-radius:10px;display:inline-block}
+.grid{display:grid;grid-template-columns:repeat(var(--cols), var(--cell-size));grid-auto-rows:var(--cell-size);gap:6px}
+.cell{width:var(--cell-size);height:var(--cell-size);background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.05));border-radius:6px;position:relative;touch-action:none;user-select:none;display:flex;align-items:center;justify-content:center}
+.cell.empty{background:var(--cell)}
+.dot{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;box-shadow:0 3px 0 rgba(0,0,0,0.2);position:absolute}
+.overlay{position:absolute;inset:0;border-radius:6px;pointer-events:none}
+.path{position:absolute;inset:0;border-radius:6px;opacity:0.95}
+#status{color:#cfe;font-size:13px}
+
+/* colors */
+.color-A{background:#ffb84d} /* orange */
+.color-B{background:#ff6b6b} /* red */
+.color-C{background:#4dd0e1} /* cyan */
+.color-D{background:#6bc9ff} /* light blue */
+.color-E{background:#b487ff} /* purple */
+.color-F{background:#ff69d1} /* pink */
+.color-G{background:#ff8a65} /* coral */
+.color-H{background:#b8e986} /* green */
+
+/* endpoint dot style (smaller ring) */
+.endpoint.dot{width:30px;height:30px;border:3px solid rgba(0,0,0,0.15)}
+
+/* responsive */
+@media (max-width:420px){
+  :root{--cell-size:40px}
+}

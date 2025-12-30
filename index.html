@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Color Connect — Flow-like Game</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Color Connect</h1>
+      <div class="controls">
+        <button id="resetBtn">Reset</button>
+        <button id="newBtn">New Level</button>
+        <span id="status"></span>
+      </div>
+    </header>
+
+    <main>
+      <div id="board" class="board"></div>
+    </main>
+
+    <footer>
+      <small>Click/tap and drag from a colored dot to its matching color. Fill all cells to win.</small>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
