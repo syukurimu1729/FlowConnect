@@ -10,8 +10,9 @@
         #game-container{width:100%; max-width:720px; margin-top:12px;}
         canvas{width:100%; height:auto; display:block; border-radius:4px; border:2px solid #555; background:#050505; touch-action:none;}
         .controls{width:100%; max-width:720px; margin-top:12px; text-align:center;}
-        button{padding:10px 18px; font-size:15px; border-radius:6px; background:#222; color:#ccc; border:1px solid #555;}
-        .status{margin-top:10px; color:#fff; text-shadow:0 0 5px #fff; min-height:1.2em;}
+        button{padding:10px 18px; font-size:15px; border-radius:6px; background:#222; color:#ccc; border:1px solid #555; cursor:pointer;}
+        button:hover{background:#333;}
+        .status{margin-top:10px; color:#fff; text-shadow:0 0 5px #fff; min-height:1.2em; font-weight: bold;}
     </style>
 </head>
 <body>
@@ -40,8 +41,8 @@ const ctx = canvas.getContext('2d');
 const statusDiv = document.getElementById('status');
 const resetBtn = document.getElementById('resetBtn');
 
-let paths = [];
-let completedPaths = [];
+let paths = []; // 現在ドラッグ中の紐
+let completedPaths = []; // すでに繋ぎ終わった紐のリスト
 let isDrawing = false;
 
 function resizeCanvas(){
@@ -61,26 +62,33 @@ function resizeCanvas(){
 
 function draw(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    // grid
-    ctx.strokeStyle = "#111";
+    
+    // 背景グリッド
+    ctx.strokeStyle = "#222";
     ctx.lineWidth = 1;
     for(let i=0;i<=GRID_SIZE;i++){
         ctx.beginPath(); ctx.moveTo(i*CELL_SIZE,0); ctx.lineTo(i*CELL_SIZE, CELL_SIZE*GRID_SIZE); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0,i*CELL_SIZE); ctx.lineTo(CELL_SIZE*GRID_SIZE, i*CELL_SIZE); ctx.stroke();
     }
-    // completed + current
+
+    // 紐の描画設定
     ctx.strokeStyle = MONO_COLOR;
     ctx.lineWidth = Math.max(8, CELL_SIZE*0.18);
     ctx.lineCap = "round"; ctx.lineJoin = "round";
-    completedPaths.concat(isDrawing ? [paths] : []).forEach(path=>{
-        if(path.length>0){
+
+    // 確定した紐と、ドラッグ中の紐を描画
+    [...completedPaths, paths].forEach(path => {
+        if(path.length > 0){
             ctx.beginPath();
             ctx.moveTo(path[0].x*CELL_SIZE + CELL_SIZE/2, path[0].y*CELL_SIZE + CELL_SIZE/2);
-            for(let i=1;i<path.length;i++) ctx.lineTo(path[i].x*CELL_SIZE + CELL_SIZE/2, path[i].y*CELL_SIZE + CELL_SIZE/2);
+            for(let i=1;i<path.length;i++) {
+                ctx.lineTo(path[i].x*CELL_SIZE + CELL_SIZE/2, path[i].y*CELL_SIZE + CELL_SIZE/2);
+            }
             ctx.stroke();
         }
     });
-    // dots
+
+    // ドット（端点）
     for(let y=0;y<GRID_SIZE;y++){
         for(let x=0;x<GRID_SIZE;x++){
             if(level[y][x] !== 0){
@@ -103,49 +111,99 @@ function getPosFromEvent(e){
     const y = Math.floor((cy - rect.top) / CELL_SIZE);
     return {x,y};
 }
-canvas.style.touchAction = 'none';
+
+// すでに他の確定した紐が通っているか
+function isOccupied(x, y) {
+    return completedPaths.some(path => path.some(p => p.x === x && p.y === y));
+}
 
 function onPointerDown(e){
     e.preventDefault();
     const pos = getPosFromEvent(e);
     if(pos.x<0||pos.x>=GRID_SIZE||pos.y<0||pos.y>=GRID_SIZE) return;
+
+    // もし端点（ドット）から開始した場合
     if(level[pos.y][pos.x] !== 0){
+        // 【重要】その点にすでに繋がっている紐があれば消す
+        const pathIdx = completedPaths.findIndex(path => 
+            (path[0].x === pos.x && path[0].y === pos.y) || 
+            (path[path.length-1].x === pos.x && path[path.length-1].y === pos.y)
+        );
+        if(pathIdx !== -1) {
+            completedPaths.splice(pathIdx, 1);
+        }
+
         paths = [pos];
         isDrawing = true;
         statusDiv.innerText = "";
         draw();
     }
 }
+
 function onPointerMove(e){
     if(!isDrawing) return;
     e.preventDefault();
     const pos = getPosFromEvent(e);
     if(pos.x<0||pos.x>=GRID_SIZE||pos.y<0||pos.y>=GRID_SIZE) return;
+
     const last = paths[paths.length-1];
+    if(last.x === pos.x && last.y === pos.y) return;
+
     const dx = Math.abs(pos.x - last.x), dy = Math.abs(pos.y - last.y);
+    
+    // 縦横1マス移動のみ
     if((dx===1 && dy===0) || (dx===0 && dy===1)){
+        
+        // すでに確定した紐がある場所には入れない
+        if(isOccupied(pos.x, pos.y)) return;
+
+        // 自分の紐内での逆走（戻る）
         const existingIndex = paths.findIndex(p=>p.x===pos.x && p.y===pos.y);
-        if(existingIndex !== -1) paths = paths.slice(0, existingIndex + 1);
-        else paths.push(pos);
-        if(level[pos.y][pos.x] !== 0 && paths.length>1){
-            completedPaths.push([...paths]);
-            isDrawing = false;
-            checkWin();
+        if(existingIndex !== -1) {
+            paths = paths.slice(0, existingIndex + 1);
+        } else {
+            paths.push(pos);
+            
+            // 別のドットに当たったか判定
+            if(level[pos.y][pos.x] !== 0){
+                const startNode = level[paths[0].y][paths[0].x];
+                const endNode = level[pos.y][pos.x];
+                
+                // 同じ種類のドットなら接続完了
+                if(startNode === endNode && paths.length > 1) {
+                    completedPaths.push([...paths]);
+                    isDrawing = false;
+                    paths = [];
+                    checkWin();
+                } else {
+                    // 違う種類のドットにぶつかったら中断
+                    isDrawing = false;
+                    paths = [];
+                }
+            }
         }
     }
     draw();
 }
+
 function onPointerUp(e){
-    isDrawing = false;
-    draw();
+    if(isDrawing) {
+        isDrawing = false;
+        paths = []; // 途中で離したらリセット
+        draw();
+    }
 }
+
 function checkWin(){
     let filled = new Set();
     completedPaths.forEach(p => p.forEach(q => filled.add(`${q.x},${q.y}`)));
+    
+    // 全マス（6x6=36マス）が埋まったかチェック
     if(filled.size === GRID_SIZE * GRID_SIZE){
-        statusDiv.innerText = "ACCESS GRANTED: [キーワード: GHOST]";
+        statusDiv.innerText = "ERROR: 順番が正しくないようだ...";
     }
 }
+
 function resetGame(){
     paths = [];
     completedPaths = [];
@@ -153,6 +211,7 @@ function resetGame(){
     statusDiv.innerText = "";
     draw();
 }
+
 function setup(){
     window.addEventListener('resize', resizeCanvas);
     canvas.addEventListener('pointerdown', onPointerDown);
@@ -166,4 +225,3 @@ setup();
 </script>
 </body>
 </html>
-
