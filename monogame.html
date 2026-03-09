@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>UNKNOWN SIGNAL - Responsive</title>
+    <title>UNKNOWN SIGNAL - Uniform Mode</title>
     <style>
         body{font-family: "Courier New", monospace; margin:0; padding:16px; background:#000; color:#fff; display:flex; flex-direction:column; align-items:center;}
         h1{margin:6px 0;font-size:clamp(18px,4vw,26px);}
@@ -27,6 +27,8 @@
 const GRID_SIZE = 6;
 let CELL_SIZE = 60;
 const MONO_COLOR = '#FFFFFF';
+
+// 内部的な文字は残っていますが、プログラムは「0かそれ以外か」しか判定しません
 const level = [
     ['A', 0, 'C','D','E', 0],
     ['B', 0,  0,  0,  0 , 0],
@@ -41,8 +43,8 @@ const ctx = canvas.getContext('2d');
 const statusDiv = document.getElementById('status');
 const resetBtn = document.getElementById('resetBtn');
 
-let paths = []; // 現在ドラッグ中の紐
-let completedPaths = []; // すでに繋ぎ終わった紐のリスト
+let paths = []; 
+let completedPaths = []; 
 let isDrawing = false;
 
 function resizeCanvas(){
@@ -76,7 +78,7 @@ function draw(){
     ctx.lineWidth = Math.max(8, CELL_SIZE*0.18);
     ctx.lineCap = "round"; ctx.lineJoin = "round";
 
-    // 確定した紐と、ドラッグ中の紐を描画
+    // 全ての紐を描画
     [...completedPaths, paths].forEach(path => {
         if(path.length > 0){
             ctx.beginPath();
@@ -88,7 +90,7 @@ function draw(){
         }
     });
 
-    // ドット（端点）
+    // ドットの描画（すべて白）
     for(let y=0;y<GRID_SIZE;y++){
         for(let x=0;x<GRID_SIZE;x++){
             if(level[y][x] !== 0){
@@ -112,7 +114,7 @@ function getPosFromEvent(e){
     return {x,y};
 }
 
-// すでに他の確定した紐が通っているか
+// 確定した紐に占有されているか判定
 function isOccupied(x, y) {
     return completedPaths.some(path => path.some(p => p.x === x && p.y === y));
 }
@@ -122,9 +124,9 @@ function onPointerDown(e){
     const pos = getPosFromEvent(e);
     if(pos.x<0||pos.x>=GRID_SIZE||pos.y<0||pos.y>=GRID_SIZE) return;
 
-    // もし端点（ドット）から開始した場合
+    // ドット（0以外）の上ならドラッグ開始
     if(level[pos.y][pos.x] !== 0){
-        // 【重要】その点にすでに繋がっている紐があれば消す
+        // そのドットから伸びている既存の紐を削除
         const pathIdx = completedPaths.findIndex(path => 
             (path[0].x === pos.x && path[0].y === pos.y) || 
             (path[path.length-1].x === pos.x && path[path.length-1].y === pos.y)
@@ -151,35 +153,25 @@ function onPointerMove(e){
 
     const dx = Math.abs(pos.x - last.x), dy = Math.abs(pos.y - last.y);
     
-    // 縦横1マス移動のみ
+    // 縦横移動のみ
     if((dx===1 && dy===0) || (dx===0 && dy===1)){
         
-        // すでに確定した紐がある場所には入れない
+        // すでに確定した他の紐がある場所はブロック
         if(isOccupied(pos.x, pos.y)) return;
 
-        // 自分の紐内での逆走（戻る）
+        // 自分の紐を戻る場合
         const existingIndex = paths.findIndex(p=>p.x===pos.x && p.y===pos.y);
         if(existingIndex !== -1) {
             paths = paths.slice(0, existingIndex + 1);
         } else {
             paths.push(pos);
             
-            // 別のドットに当たったか判定
-            if(level[pos.y][pos.x] !== 0){
-                const startNode = level[paths[0].y][paths[0].x];
-                const endNode = level[pos.y][pos.x];
-                
-                // 同じ種類のドットなら接続完了
-                if(startNode === endNode && paths.length > 1) {
-                    completedPaths.push([...paths]);
-                    isDrawing = false;
-                    paths = [];
-                    checkWin();
-                } else {
-                    // 違う種類のドットにぶつかったら中断
-                    isDrawing = false;
-                    paths = [];
-                }
+            // 別のドット（0以外）に到達したら接続
+            if(level[pos.y][pos.x] !== 0 && paths.length > 1){
+                completedPaths.push([...paths]);
+                isDrawing = false;
+                paths = [];
+                checkWin();
             }
         }
     }
@@ -189,7 +181,7 @@ function onPointerMove(e){
 function onPointerUp(e){
     if(isDrawing) {
         isDrawing = false;
-        paths = []; // 途中で離したらリセット
+        paths = []; 
         draw();
     }
 }
@@ -198,7 +190,7 @@ function checkWin(){
     let filled = new Set();
     completedPaths.forEach(p => p.forEach(q => filled.add(`${q.x},${q.y}`)));
     
-    // 全マス（6x6=36マス）が埋まったかチェック
+    // 全36マスが埋まったかのみをチェック
     if(filled.size === GRID_SIZE * GRID_SIZE){
         statusDiv.innerText = "ERROR: 順番が正しくないようだ...";
     }
