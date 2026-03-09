@@ -190,7 +190,7 @@ function checkWin(){
     const filledCount = path.length;
     const totalCells = GRID_SIZE * GRID_SIZE;
     if(nextNumberRequired > 10 && filledCount === totalCells){
-        statusDiv.innerText = "封印解除： [キーワード: VOID]";
+        statusDiv.innerText = "封印解除： この画面をスタッフに見せてください";
         isCleared = true; // クリアフラグを立てる
     } else if(nextNumberRequired > 10){
         statusDiv.innerText = "エラー：魔力が全マスに充填されていません";
@@ -219,3 +219,4 @@ setup();
 </script>
 </body>
 </html>
+
