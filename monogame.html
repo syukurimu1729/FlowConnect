@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>UNKNOWN SIGNAL - Uniform Mode</title>
+    <title>UNKNOWN SIGNAL - One Line Mode</title>
     <style>
         body{font-family: "Courier New", monospace; margin:0; padding:16px; background:#000; color:#fff; display:flex; flex-direction:column; align-items:center;}
         h1{margin:6px 0;font-size:clamp(18px,4vw,26px);}
@@ -28,14 +28,14 @@ const GRID_SIZE = 6;
 let CELL_SIZE = 60;
 const MONO_COLOR = '#FFFFFF';
 
-// 内部的な文字は残っていますが、プログラムは「0かそれ以外か」しか判定しません
+// ドットの配置（すべて共通の「通過点」として扱います）
 const level = [
-    ['A', 0, 'C','D','E', 0],
-    ['B', 0,  0,  0,  0 , 0],
-    [ 0,  0,  0,  0,  0,  0],
-    [ 0,  0,  0,  0,  0,  0],
-    [ 0,  0, 'B', 0,  0,'E'],
-    ['A', 0, 'D',  0,  0,'C']
+    [1, 0, 1, 1, 1, 0],
+    [1, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 1, 0, 0, 1],
+    [1, 0, 1, 0, 0, 1]
 ];
 
 const canvas = document.getElementById('gameCanvas');
@@ -43,8 +43,7 @@ const ctx = canvas.getContext('2d');
 const statusDiv = document.getElementById('status');
 const resetBtn = document.getElementById('resetBtn');
 
-let paths = []; 
-let completedPaths = []; 
+let paths = []; // 今回はこれ1本だけで全てを繋ぎます
 let isDrawing = false;
 
 function resizeCanvas(){
@@ -73,24 +72,20 @@ function draw(){
         ctx.beginPath(); ctx.moveTo(0,i*CELL_SIZE); ctx.lineTo(CELL_SIZE*GRID_SIZE, i*CELL_SIZE); ctx.stroke();
     }
 
-    // 紐の描画設定
-    ctx.strokeStyle = MONO_COLOR;
-    ctx.lineWidth = Math.max(8, CELL_SIZE*0.18);
-    ctx.lineCap = "round"; ctx.lineJoin = "round";
-
-    // 全ての紐を描画
-    [...completedPaths, paths].forEach(path => {
-        if(path.length > 0){
-            ctx.beginPath();
-            ctx.moveTo(path[0].x*CELL_SIZE + CELL_SIZE/2, path[0].y*CELL_SIZE + CELL_SIZE/2);
-            for(let i=1;i<path.length;i++) {
-                ctx.lineTo(path[i].x*CELL_SIZE + CELL_SIZE/2, path[i].y*CELL_SIZE + CELL_SIZE/2);
-            }
-            ctx.stroke();
+    // 1本の太い紐の描画
+    if(paths.length > 0){
+        ctx.strokeStyle = MONO_COLOR;
+        ctx.lineWidth = Math.max(8, CELL_SIZE*0.18);
+        ctx.lineCap = "round"; ctx.lineJoin = "round";
+        ctx.beginPath();
+        ctx.moveTo(paths[0].x*CELL_SIZE + CELL_SIZE/2, paths[0].y*CELL_SIZE + CELL_SIZE/2);
+        for(let i=1; i<paths.length; i++) {
+            ctx.lineTo(paths[i].x*CELL_SIZE + CELL_SIZE/2, paths[i].y*CELL_SIZE + CELL_SIZE/2);
         }
-    });
+        ctx.stroke();
+    }
 
-    // ドットの描画（すべて白）
+    // ドットの描画
     for(let y=0;y<GRID_SIZE;y++){
         for(let x=0;x<GRID_SIZE;x++){
             if(level[y][x] !== 0){
@@ -114,28 +109,14 @@ function getPosFromEvent(e){
     return {x,y};
 }
 
-// 確定した紐に占有されているか判定
-function isOccupied(x, y) {
-    return completedPaths.some(path => path.some(p => p.x === x && p.y === y));
-}
-
 function onPointerDown(e){
     e.preventDefault();
     const pos = getPosFromEvent(e);
     if(pos.x<0||pos.x>=GRID_SIZE||pos.y<0||pos.y>=GRID_SIZE) return;
 
-    // ドット（0以外）の上ならドラッグ開始
+    // どのドットからでも開始可能
     if(level[pos.y][pos.x] !== 0){
-        // そのドットから伸びている既存の紐を削除
-        const pathIdx = completedPaths.findIndex(path => 
-            (path[0].x === pos.x && path[0].y === pos.y) || 
-            (path[path.length-1].x === pos.x && path[path.length-1].y === pos.y)
-        );
-        if(pathIdx !== -1) {
-            completedPaths.splice(pathIdx, 1);
-        }
-
-        paths = [pos];
+        paths = [pos]; // 新しく一筆書きを開始
         isDrawing = true;
         statusDiv.innerText = "";
         draw();
@@ -153,52 +134,37 @@ function onPointerMove(e){
 
     const dx = Math.abs(pos.x - last.x), dy = Math.abs(pos.y - last.y);
     
-    // 縦横移動のみ
+    // 縦横1マスずつの移動のみ
     if((dx===1 && dy===0) || (dx===0 && dy===1)){
-        
-        // すでに確定した他の紐がある場所はブロック
-        if(isOccupied(pos.x, pos.y)) return;
-
-        // 自分の紐を戻る場合
         const existingIndex = paths.findIndex(p=>p.x===pos.x && p.y===pos.y);
+        
         if(existingIndex !== -1) {
+            // すでに通った場所に戻る場合は、そこまでの長さに切り詰める（一筆書きの修正）
             paths = paths.slice(0, existingIndex + 1);
         } else {
+            // 新しいマスへ進む
             paths.push(pos);
-            
-            // 別のドット（0以外）に到達したら接続
-            if(level[pos.y][pos.x] !== 0 && paths.length > 1){
-                completedPaths.push([...paths]);
-                isDrawing = false;
-                paths = [];
-                checkWin();
-            }
+            checkWin(); // 移動するたびに判定
         }
     }
     draw();
 }
 
 function onPointerUp(e){
-    if(isDrawing) {
-        isDrawing = false;
-        paths = []; 
-        draw();
-    }
+    isDrawing = false;
+    // 指を離しても、一筆書きが完成していなければそのまま（リセットしない）
+    draw();
 }
 
 function checkWin(){
-    let filled = new Set();
-    completedPaths.forEach(p => p.forEach(q => filled.add(`${q.x},${q.y}`)));
-    
-    // 全36マスが埋まったかのみをチェック
-    if(filled.size === GRID_SIZE * GRID_SIZE){
+    // 全マス（36マス）がこの1本の紐に含まれているか
+    if(paths.length === GRID_SIZE * GRID_SIZE){
         statusDiv.innerText = "ERROR: 順番が正しくないようだ...";
     }
 }
 
 function resetGame(){
     paths = [];
-    completedPaths = [];
     isDrawing = false;
     statusDiv.innerText = "";
     draw();
