@@ -3,25 +3,26 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>SEQUENTIAL LOCK - Responsive</title>
+    <title>魔法陣</title>
     <style>
         body{font-family: "Courier New", monospace; margin:0; padding:16px; background:#000; color:#fff; display:flex; flex-direction:column; align-items:center;}
-        h1{margin:6px 0;font-size:clamp(18px,4vw,26px);}
+        h1{margin:6px 0;font-size:clamp(18px,4vw,26px); letter-spacing: 0.2em;}
         #game-container{width:100%; max-width:720px; margin-top:12px;}
         canvas{width:100%; height:auto; display:block; border-radius:4px; border:2px solid #333; background:#050505; touch-action:none;}
         .controls{width:100%; max-width:720px; margin-top:12px; text-align:center;}
-        button{padding:10px 18px; font-size:15px; border-radius:6px; background:#111; color:#bbb; border:1px solid #444;}
-        .status{margin-top:10px; color:#00ff00; text-shadow:0 0 5px #00ff00; min-height:1.2em;}
-        .hint{color:#444; font-size:12px; margin-top:6px;}
+        button{padding:10px 18px; font-size:15px; border-radius:6px; background:#111; color:#bbb; border:1px solid #444; cursor:pointer;}
+        button:hover{background:#222; color:#fff;}
+        .status{margin-top:10px; color:#00ff00; text-shadow:0 0 8px #00ff00; min-height:1.2em; font-weight: bold;}
+        .hint{color:#555; font-size:12px; margin-top:6px;}
     </style>
 </head>
 <body>
-    <h1>SEQUENTIAL LOCK</h1>
+    <h1>魔法陣</h1>
     <div id="game-container"><canvas id="gameCanvas"></canvas></div>
     <div class="controls">
-        <button id="resetBtn">RESET SYSTEM</button>
+        <button id="resetBtn">魔法陣をリセット</button>
         <div id="status" class="status"></div>
-        <div class="hint">1 → 2 → 3 ... 10 の順に通って全マスを埋めてください</div>
+        <div class="hint">1 → 2 → 3 ... 10 の順に全てのマスを埋めてください</div>
     </div>
 
 <script>
@@ -44,6 +45,7 @@ const resetBtn = document.getElementById('resetBtn');
 let path = [];
 let isDrawing = false;
 let nextNumberRequired = 1;
+let isCleared = false; // クリア状態を管理
 
 function resizeCanvas(){
     const dpr = window.devicePixelRatio || 1;
@@ -112,9 +114,12 @@ canvas.style.touchAction = 'none';
 
 function onPointerDown(e){
     e.preventDefault();
+    if(isCleared) return; // クリア後は操作を受け付けない
+
     const pos = getPosFromEvent(e);
     if(pos.x<0||pos.x>=GRID_SIZE||pos.y<0||pos.y>=GRID_SIZE) return;
     const cellValue = level[pos.y][pos.x];
+    
     if(path.length === 0){
         if(cellValue === "1"){
             path = [pos];
@@ -130,19 +135,21 @@ function onPointerDown(e){
     statusDiv.innerText = "";
     draw();
 }
+
 function onPointerMove(e){
-    if(!isDrawing) return;
+    if(!isDrawing || isCleared) return;
     e.preventDefault();
     const pos = getPosFromEvent(e);
     if(pos.x<0||pos.x>=GRID_SIZE||pos.y<0||pos.y>=GRID_SIZE) return;
     const lastPos = path[path.length - 1];
     if(!lastPos) return;
     if(pos.x === lastPos.x && pos.y === lastPos.y) return;
+
     const dx = Math.abs(pos.x - lastPos.x), dy = Math.abs(pos.y - lastPos.y);
     if((dx===1 && dy===0) || (dx===0 && dy===1)){
         const existingIndex = path.findIndex(p=>p.x===pos.x && p.y===pos.y);
         if(existingIndex !== -1){
-            // 戻る: nextNumberRequired を再計算（簡易）
+            // 戻る処理
             const removed = path.slice(existingIndex+1);
             removed.forEach(p=>{
                 const v = level[p.y][p.x];
@@ -173,26 +180,32 @@ function onPointerMove(e){
     }
     draw();
 }
+
 function onPointerUp(e){
     isDrawing = false;
     draw();
 }
+
 function checkWin(){
     const filledCount = path.length;
     const totalCells = GRID_SIZE * GRID_SIZE;
     if(nextNumberRequired > 10 && filledCount === totalCells){
-        statusDiv.innerText = "SYSTEM UNLOCKED: [Keyword: VOID]";
+        statusDiv.innerText = "封印解除： [キーワード: VOID]";
+        isCleared = true; // クリアフラグを立てる
     } else if(nextNumberRequired > 10){
-        statusDiv.innerText = "ERROR: NOT ALL NODES FILLED";
+        statusDiv.innerText = "エラー：魔力が全マスに充填されていません";
     }
 }
+
 function resetGame(){
     path = [];
     nextNumberRequired = 1;
     isDrawing = false;
+    isCleared = false; // リセット時はフラグを下ろす
     statusDiv.innerText = "";
     draw();
 }
+
 function setup(){
     window.addEventListener('resize', resizeCanvas);
     canvas.addEventListener('pointerdown', onPointerDown);
@@ -206,5 +219,3 @@ setup();
 </script>
 </body>
 </html>
-
-
