@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>魔法陣 - Flow Connect Style</title>
+    <style>
+        :root{--bg:#1a1a2e;--panel:#0f3460;--accent:#e94560;--muted:#333;}
+        html,body{height:100%;margin:0; overflow: hidden;}
+        body {
+            font-family: system-ui,-apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            justify-content:flex-start;
+            background:var(--bg);
+            color:white;
+            padding:16px;
+            box-sizing:border-box;
+        }
+        h1{margin:8px 0 4px;font-size:clamp(18px,4vw,28px);}
+        #game-container{position:relative;margin-top:12px; user-select:none; width:100%; max-width:720px;}
+        canvas{display:block;border:4px solid var(--muted); border-radius:8px; background:var(--panel); width:100%; height:auto; touch-action:none;}
+        .controls{margin-top:14px; text-align:center; width:100%; max-width:720px;}
+        button{padding:12px 22px; font-size:16px; cursor:pointer; background:var(--accent); border:none; color:white; border-radius:8px;}
+        .status{margin-top:10px; font-weight:bold; color:#4ecca3; min-height:1.2em; font-size: 1.1em;}
+        @media (hover:hover){ button:hover{opacity:0.95;} }
+    </style>
+</head>
+<body>
+    <h1>魔法陣</h1>
+    <div id="game-container">
+        <canvas id="gameCanvas" ></canvas>
+    </div>
+    <div class="controls">
+        <button id="resetBtn">魔法陣をリセット</button>
+        <div id="status" class="status"></div>
+    </div>
+
+<script>
+/* ---- 設定 ---- */
+const GRID_SIZE = 6;
+const COLORS = { 'A':'#0074D9','B':'#FFDC00','C':'#2ECC40','E':'#B10DC9' };
+const level = [
+    ['A', 0, 'C',0,'E', 0],
+    ['B', 0,  0,  0,  0 , 0],
+    [ 0,  0,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  0,  0],
+    [ 0,  0, 'B', 0,  0,'E'],
+    ['A', 0, 0,  0,  0,'C']
+];
+
+/* ---- DOM & 変数 ---- */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const statusDiv = document.getElementById('status');
+const resetBtn = document.getElementById('resetBtn');
+
+let CELL_SIZE = 60;
+let paths = {};
+let isDrawing = false;
+let currentColor = null;
+
+/* ---- 初期化 ---- */
+function initPaths() {
+    Object.keys(COLORS).forEach(k => paths[k] = []);
+}
+
+/* ---- 描画 ---- */
+function draw() {
+    ctx.clearRect(0,0, canvas.width, canvas.height);
+    
+    // グリッド背景
+    ctx.strokeStyle = "#16213e";
+    ctx.lineWidth = 2;
+    for(let i=0;i<=GRID_SIZE;i++){
+        ctx.beginPath(); ctx.moveTo(i*CELL_SIZE,0); ctx.lineTo(i*CELL_SIZE, CELL_SIZE*GRID_SIZE); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,i*CELL_SIZE); ctx.lineTo(CELL_SIZE*GRID_SIZE, i*CELL_SIZE); ctx.stroke();
+    }
+
+    // 経路の描画
+    Object.keys(paths).forEach(colorKey=>{
+        const path = paths[colorKey];
+        if(path.length > 0){
+            ctx.strokeStyle = COLORS[colorKey];
+            ctx.lineWidth = CELL_SIZE * 0.4;
+            ctx.lineCap = "round"; ctx.lineJoin = "round";
+            ctx.beginPath();
+            ctx.moveTo(path[0].x*CELL_SIZE + CELL_SIZE/2, path[0].y*CELL_SIZE + CELL_SIZE/2);
+            for(let i=1;i<path.length;i++){
+                ctx.lineTo(path[i].x*CELL_SIZE + CELL_SIZE/2, path[i].y*CELL_SIZE + CELL_SIZE/2);
+            }
+            ctx.stroke();
+        }
+    });
+
+    // ドットの描画
+    for(let y=0;y<GRID_SIZE;y++){
+        for(let x=0;x<GRID_SIZE;x++){
+            const cell = level[y][x];
+            if(cell !== 0){
+                ctx.fillStyle = COLORS[cell];
+                ctx.beginPath();
+                ctx.arc(x*CELL_SIZE + CELL_SIZE/2, y*CELL_SIZE + CELL_SIZE/2, CELL_SIZE/3.5, 0, Math.PI*2);
+                ctx.fill();
+                // 枠線（少し魔法陣っぽく）
+                ctx.strokeStyle = "rgba(255,255,255,0.3)";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
+    }
+}
+
+/* ---- 座標取得 ---- */
+function getPosFromEvent(e){
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    const x = Math.floor((clientX - rect.left) / (rect.width / GRID_SIZE));
+    const y = Math.floor((clientY - rect.top) / (rect.height / GRID_SIZE));
+    return {x, y};
+}
+
+/* ---- ロジック補助 ---- */
+// そのマスが他の色で使用中かチェック
+function isCellOccupied(x, y, myColor) {
+    return Object.keys(paths).some(color => {
+        if (color === myColor) return false;
+        return paths[color].some(p => p.x === x && p.y === y);
+    });
+}
+
+// ラインが完成しているかチェック
+function isLineComplete(color) {
+    const p = paths[color];
+    if (p.length < 2) return false;
+    const start = p[0];
+    const end = p[p.length - 1];
+    return level[start.y][start.x] === color && level[end.y][end.x] === color;
+}
+
+/* ---- イベントハンドラ ---- */
+function onPointerDown(e){
+    const pos = getPosFromEvent(e);
+    if(pos.x<0 || pos.x>=GRID_SIZE || pos.y<0 || pos.y>=GRID_SIZE) return;
+
+    const cell = level[pos.y][pos.x];
+    
+    // 1. 点のあるマスをクリックした場合
+    if(cell !== 0){
+        currentColor = cell;
+        paths[currentColor] = [pos]; // 新しく引き直す
+        isDrawing = true;
+    } 
+    // 2. すでに線があるマスの場合
+    else {
+        // どの色の線がここを通っているか探す
+        const ownerColor = Object.keys(paths).find(c => paths[c].some(p => p.x === pos.x && p.y === pos.y));
+        if (ownerColor) {
+            // もし完成しているラインなら、途中のクリックでは反応させない（仕様）
+            if (isLineComplete(ownerColor)) return;
+
+            // 未完成ラインの途中なら、そこから引き直し可能にする
+            currentColor = ownerColor;
+            const idx = paths[currentColor].findIndex(p => p.x === pos.x && p.y === pos.y);
+            paths[currentColor] = paths[currentColor].slice(0, idx + 1);
+            isDrawing = true;
+        }
+    }
+    statusDiv.innerText = "";
+    draw();
+}
+
+function onPointerMove(e){
+    if(!isDrawing) return;
+    const pos = getPosFromEvent(e);
+    if(pos.x<0 || pos.x>=GRID_SIZE || pos.y<0 || pos.y>=GRID_SIZE) return;
+
+    const path = paths[currentColor];
+    const lastPos = path[path.length - 1];
+    if(pos.x === lastPos.x && pos.y === lastPos.y) return;
+
+    const dx = Math.abs(pos.x - lastPos.x);
+    const dy = Math.abs(pos.y - lastPos.y);
+
+    // 隣接するマスのみ
+    if((dx===1 && dy===0) || (dx===0 && dy===1)){
+        
+        // UX: 1つ前のマスに戻ったら線を消す
+        if(path.length > 1 && pos.x === path[path.length-2].x && pos.y === path[path.length-2].y){
+            path.pop();
+            draw();
+            return;
+        }
+
+        // 他の色の線やドットがないかチェック
+        if(isCellOccupied(pos.x, pos.y, currentColor)) return;
+
+        const targetCell = level[pos.y][pos.x];
+
+        // 空きマス、または自分の色のゴールドット
+        if(targetCell === 0 || targetCell === currentColor){
+            // すでに自分の線が通っている場所（ループ）は、そこまで戻る処理
+            const existingIndex = path.findIndex(p=>p.x===pos.x && p.y===pos.y);
+            if(existingIndex !== -1){
+                paths[currentColor] = path.slice(0, existingIndex + 1);
+            } else {
+                // ゴールに到達したか
+                path.push(pos);
+                if(targetCell === currentColor){
+                    isDrawing = false;
+                    checkWin();
+                }
+            }
+            draw();
+        }
+    }
+}
+
+function onPointerUp(){
+    if(isDrawing && currentColor){
+        // ゴールに到達せずに離したら、中途半端な線は残すが、
+        // もし1マス（ドットの上だけ）なら消す
+        if(paths[currentColor].length === 1) paths[currentColor] = [];
+    }
+    isDrawing = false;
+    currentColor = null;
+    draw();
+}
+
+/* ---- 判定 ---- */
+function checkWin(){
+    const allConnected = Object.keys(COLORS).every(c => isLineComplete(c));
+    let cellsFilled = 0;
+    Object.values(paths).forEach(p => cellsFilled += p.length);
+
+    if(allConnected && cellsFilled === GRID_SIZE * GRID_SIZE){
+        statusDiv.innerText = "魔法陣完成！クリアです！";
+    }
+}
+
+/* ---- システム ---- */
+function resizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const containerWidth = Math.min(window.innerWidth * 0.95, 720);
+    const maxByHeight = window.innerHeight * 0.6;
+    const targetSize = Math.min(containerWidth, maxByHeight);
+    CELL_SIZE = Math.floor(targetSize / GRID_SIZE);
+    
+    const logicalW = CELL_SIZE * GRID_SIZE;
+    canvas.style.width = logicalW + 'px';
+    canvas.style.height = logicalW + 'px';
+    canvas.width = logicalW * dpr;
+    canvas.height = logicalW * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draw();
+}
+
+function setup(){
+    initPaths();
+    window.addEventListener('resize', resizeCanvas);
+    canvas.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    resetBtn.addEventListener('click', () => {
+        initPaths();
+        statusDiv.innerText = "";
+        draw();
+    });
+    resizeCanvas();
+}
+
+setup();
+</script>
+</body>
+</html>
