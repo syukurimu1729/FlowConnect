@@ -9,14 +9,8 @@
         html,body{height:100%;margin:0; overflow: hidden;}
         body {
             font-family: system-ui,-apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
-            display:flex;
-            flex-direction:column;
-            align-items:center;
-            justify-content:flex-start;
-            background:var(--bg);
-            color:white;
-            padding:16px;
-            box-sizing:border-box;
+            display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+            background:var(--bg); color:white; padding:16px; box-sizing:border-box;
         }
         h1{margin:8px 0 4px;font-size:clamp(18px,4vw,28px);}
         #game-container{position:relative;margin-top:12px; user-select:none; width:100%; max-width:720px;}
@@ -42,7 +36,7 @@
 const GRID_SIZE = 6;
 const COLORS = { 'A':'#0074D9','B':'#FFDC00','C':'#2ECC40','D':'#FF4136','E':'#B10DC9' };
 const level = [
-    ['A', 0, 'C','D','E', 0],
+    ['A', 0, 'C','D', 0, 'E'],
     ['B', 0,  0,  0,  0 , 0],
     [ 0,  0,  0,  0,  0,  0],
     [ 0,  0,  0,  0,  0,  0],
@@ -50,7 +44,7 @@ const level = [
     ['A', 0, 'D',  0,  0,'C']
 ];
 
-/* ---- DOM & 変数 ---- */
+/* ---- 動的変数 ---- */
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const statusDiv = document.getElementById('status');
@@ -70,7 +64,7 @@ function initPaths() {
 function draw() {
     ctx.clearRect(0,0, canvas.width, canvas.height);
     
-    // グリッド背景
+    // グリッド
     ctx.strokeStyle = "#16213e";
     ctx.lineWidth = 2;
     for(let i=0;i<=GRID_SIZE;i++){
@@ -78,12 +72,12 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(0,i*CELL_SIZE); ctx.lineTo(CELL_SIZE*GRID_SIZE, i*CELL_SIZE); ctx.stroke();
     }
 
-    // 経路の描画
+    // 経路
     Object.keys(paths).forEach(colorKey=>{
         const path = paths[colorKey];
         if(path.length > 0){
             ctx.strokeStyle = COLORS[colorKey];
-            ctx.lineWidth = CELL_SIZE * 0.4;
+            ctx.lineWidth = CELL_SIZE * 0.45;
             ctx.lineCap = "round"; ctx.lineJoin = "round";
             ctx.beginPath();
             ctx.moveTo(path[0].x*CELL_SIZE + CELL_SIZE/2, path[0].y*CELL_SIZE + CELL_SIZE/2);
@@ -94,7 +88,7 @@ function draw() {
         }
     });
 
-    // ドットの描画
+    // ドット
     for(let y=0;y<GRID_SIZE;y++){
         for(let x=0;x<GRID_SIZE;x++){
             const cell = level[y][x];
@@ -103,7 +97,6 @@ function draw() {
                 ctx.beginPath();
                 ctx.arc(x*CELL_SIZE + CELL_SIZE/2, y*CELL_SIZE + CELL_SIZE/2, CELL_SIZE/3.5, 0, Math.PI*2);
                 ctx.fill();
-                // 枠線（少し魔法陣っぽく）
                 ctx.strokeStyle = "rgba(255,255,255,0.3)";
                 ctx.lineWidth = 2;
                 ctx.stroke();
@@ -112,7 +105,7 @@ function draw() {
     }
 }
 
-/* ---- 座標取得 ---- */
+/* ---- 座標・判定ロジック ---- */
 function getPosFromEvent(e){
     const rect = canvas.getBoundingClientRect();
     const clientX = e.clientX || (e.touches && e.touches[0].clientX);
@@ -122,16 +115,19 @@ function getPosFromEvent(e){
     return {x, y};
 }
 
-/* ---- ロジック補助 ---- */
-// そのマスが他の色で使用中かチェック
+// 他の色（ライン or ドット）に占有されているか
 function isCellOccupied(x, y, myColor) {
+    // 1. 他の色のドットがある
+    if (level[y][x] !== 0 && level[y][x] !== myColor) return true;
+    
+    // 2. 他の色のラインが既に通っている
     return Object.keys(paths).some(color => {
         if (color === myColor) return false;
         return paths[color].some(p => p.x === x && p.y === y);
     });
 }
 
-// ラインが完成しているかチェック
+// ラインが完成（ドットとドットが繋がっている）しているか
 function isLineComplete(color) {
     const p = paths[color];
     if (p.length < 2) return false;
@@ -147,21 +143,20 @@ function onPointerDown(e){
 
     const cell = level[pos.y][pos.x];
     
-    // 1. 点のあるマスをクリックした場合
+    // 点をクリック
     if(cell !== 0){
         currentColor = cell;
-        paths[currentColor] = [pos]; // 新しく引き直す
+        paths[currentColor] = [pos]; // 始点/終点をクリックでリセットして開始
         isDrawing = true;
     } 
-    // 2. すでに線があるマスの場合
+    // 線の上をクリック
     else {
-        // どの色の線がここを通っているか探す
         const ownerColor = Object.keys(paths).find(c => paths[c].some(p => p.x === pos.x && p.y === pos.y));
         if (ownerColor) {
-            // もし完成しているラインなら、途中のクリックでは反応させない（仕様）
+            // すでに完成しているラインなら、途中のクリックでは何もさせない
             if (isLineComplete(ownerColor)) return;
 
-            // 未完成ラインの途中なら、そこから引き直し可能にする
+            // 未完成ならその地点から引き直し
             currentColor = ownerColor;
             const idx = paths[currentColor].findIndex(p => p.x === pos.x && p.y === pos.y);
             paths[currentColor] = paths[currentColor].slice(0, idx + 1);
@@ -184,34 +179,30 @@ function onPointerMove(e){
     const dx = Math.abs(pos.x - lastPos.x);
     const dy = Math.abs(pos.y - lastPos.y);
 
-    // 隣接するマスのみ
+    // 隣接移動のみ
     if((dx===1 && dy===0) || (dx===0 && dy===1)){
         
-        // UX: 1つ前のマスに戻ったら線を消す
+        // 【戻る操作】1つ前に戻ったら現在の末尾を消す
         if(path.length > 1 && pos.x === path[path.length-2].x && pos.y === path[path.length-2].y){
             path.pop();
             draw();
             return;
         }
 
-        // 他の色の線やドットがないかチェック
+        // 【進入禁止】他の色のラインやドットがある場合は進めない
         if(isCellOccupied(pos.x, pos.y, currentColor)) return;
+
+        // 【重複禁止】自分の既存ラインへの進入も禁止（戻る操作以外）
+        if(path.some(p => p.x === pos.x && p.y === pos.y)) return;
 
         const targetCell = level[pos.y][pos.x];
 
-        // 空きマス、または自分の色のゴールドット
+        // 進行可能（空きマス または 自分の色のドット）
         if(targetCell === 0 || targetCell === currentColor){
-            // すでに自分の線が通っている場所（ループ）は、そこまで戻る処理
-            const existingIndex = path.findIndex(p=>p.x===pos.x && p.y===pos.y);
-            if(existingIndex !== -1){
-                paths[currentColor] = path.slice(0, existingIndex + 1);
-            } else {
-                // ゴールに到達したか
-                path.push(pos);
-                if(targetCell === currentColor){
-                    isDrawing = false;
-                    checkWin();
-                }
+            path.push(pos);
+            if(targetCell === currentColor){
+                isDrawing = false; // 完成
+                checkWin();
             }
             draw();
         }
@@ -220,8 +211,7 @@ function onPointerMove(e){
 
 function onPointerUp(){
     if(isDrawing && currentColor){
-        // ゴールに到達せずに離したら、中途半端な線は残すが、
-        // もし1マス（ドットの上だけ）なら消す
+        // ドットの上だけで離した場合はパスを消す
         if(paths[currentColor].length === 1) paths[currentColor] = [];
     }
     isDrawing = false;
@@ -229,23 +219,21 @@ function onPointerUp(){
     draw();
 }
 
-/* ---- 判定 ---- */
+/* ---- 判定・リサイズ ---- */
 function checkWin(){
     const allConnected = Object.keys(COLORS).every(c => isLineComplete(c));
     let cellsFilled = 0;
     Object.values(paths).forEach(p => cellsFilled += p.length);
 
+    // 全色接続 かつ 36マス全て埋まっている
     if(allConnected && cellsFilled === GRID_SIZE * GRID_SIZE){
-        statusDiv.innerText = "魔法陣完成！クリアです！";
+        statusDiv.innerText = "魔法陣完成！全てのマスが埋まりました！";
     }
 }
 
-/* ---- システム ---- */
 function resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
-    const containerWidth = Math.min(window.innerWidth * 0.95, 720);
-    const maxByHeight = window.innerHeight * 0.6;
-    const targetSize = Math.min(containerWidth, maxByHeight);
+    const targetSize = Math.min(window.innerWidth * 0.95, window.innerHeight * 0.65);
     CELL_SIZE = Math.floor(targetSize / GRID_SIZE);
     
     const logicalW = CELL_SIZE * GRID_SIZE;
